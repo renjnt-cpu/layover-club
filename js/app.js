@@ -123,7 +123,41 @@ async function route() {
   }
 }
 
+// Arriving from an emailed "set your password" / invite link: the person picks their OWN password here. Nobody else ever sees it.
+let arrivedByLink = /[#&?]type=(recovery|invite)/.test(location.hash + location.search);
+
+let settingPassword = false;
+sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY' && !settingPassword) { arrivedByLink = true; showSetPassword(); } });
+
+async function showSetPassword() {
+  if (settingPassword) return;
+  settingPassword = true;
+  const { data } = await sb.auth.getSession();   // supabase-js reads the tokens from the link and signs the person in
+  if (!data.session) { settingPassword = false; arrivedByLink = false; history.replaceState(null, '', location.pathname); renderLogin('That link has expired or was already used. Ask the Super Admin to send a new one.'); return; }
+  const pw1 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', required: true, minlength: 10, placeholder: 'New password (at least 10 characters)', 'aria-label': 'New password' });
+  const pw2 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', required: true, minlength: 10, placeholder: 'Type it again', 'aria-label': 'New password again' });
+  const err = h('p', { class: 'text-sm text-red-700 font-semibold', role: 'alert' });
+  const btn = h('button', { class: 'btn btn-primary w-full', type: 'submit' }, 'Save my password');
+  const form = h('form', { class: 'space-y-3', onsubmit: async (e) => {
+    e.preventDefault(); err.textContent = '';
+    if (pw1.value.length < 10) { err.textContent = 'Use at least 10 characters.'; return; }
+    if (pw1.value !== pw2.value) { err.textContent = 'The two passwords are not the same.'; return; }
+    await busy(btn, async () => {
+      const { error } = await sb.auth.updateUser({ password: pw1.value });
+      if (error) { err.textContent = error.message || 'The password could not be saved.'; return; }
+      settingPassword = false; arrivedByLink = false; history.replaceState(null, '', location.pathname);
+      toast('Password saved. You are signed in.');
+      boot();
+    });
+  } }, pw1, pw2, err, btn);
+  app.replaceChildren(h('main', { id: 'main', class: 'min-h-screen flex items-center justify-center p-4' },
+    h('div', { class: 'card w-full max-w-sm space-y-4' },
+      h('div', {}, h('div', { class: 'text-xs font-extrabold tracking-widest', style: 'color:#0642B8' }, 'LAYOVER DESSERT CAFÉ'), h('h1', { class: 'text-2xl font-extrabold', style: 'color:#0642B8' }, 'Set your password'), h('p', { class: 'text-sm muted' }, 'Choose a password only you know. Use it with your login to sign in.')),
+      form)));
+}
+
 export async function boot() {
+  if (arrivedByLink) { await showSetPassword(); return; }
   const { data } = await sb.auth.getSession();
   if (!data.session) { renderLogin(); return; }
   try { me = await rpc('club_me'); }
