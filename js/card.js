@@ -130,7 +130,8 @@ export function drawCard(side, m, token, rules) {
     const inner = box - 3.2 * u, mod = inner / (n + 4), ox = bx + 1.6 * u + 2 * mod, oy = by + 1.6 * u + 2 * mod;
     ctx.fillStyle = '#000'; for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (dark(r, q)) ctx.fillRect(ox + q * mod, oy + r * mod, Math.ceil(mod), Math.ceil(mod));
     txt('SCAN TO VERIFY MEMBERSHIP', 100 - 5.5 - 16.5, 41.5, 2.3, 800, '#fff', { align: 'center', max: 36 });
-    txt('One Member. One Daily Redemption.', 5.5, 54, 3.2, 700, '#cfe0ff', { max: 52 });
+    txt('One Member. One Daily', 5.5, 53.4, 3.2, 700, '#cfe0ff', { max: 52 });
+    txt('Redemption.', 5.5, 57.2, 3.2, 700, '#cfe0ff', { max: 52 });
     txt(groupCode(token), 100 - 5.5 - 16.5, 58.2, 2.1, 500, '#cfe0ff', { align: 'center', max: 36 });
   }
   ctx.restore();
