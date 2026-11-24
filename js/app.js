@@ -62,10 +62,24 @@ function renderLogin(message) {
       boot();
     });
   } }, id, pw, err, btn);
+  // First time, or forgot the password: the person asks for a link to their OWN email and chooses a password there. Nobody else ever sees it.
+  const fEmail = h('input', { class: 'input', type: 'email', required: true, autocomplete: 'email', placeholder: 'Your email address', 'aria-label': 'Email address for the link' });
+  const fMsg = h('p', { class: 'text-sm font-semibold', role: 'status' });
+  const fBtn = h('button', { class: 'btn btn-primary w-full', type: 'submit' }, 'Email me a link');
+  const forgotBox = h('form', { class: 'space-y-3', style: 'display:none', onsubmit: async (e) => {
+    e.preventDefault(); fMsg.textContent = '';
+    await busy(fBtn, async () => {
+      const { error } = await sb.auth.resetPasswordForEmail(fEmail.value.trim(), { redirectTo: location.origin + location.pathname });
+      fMsg.textContent = error ? (/rate limit/i.test(error.message) ? 'Too many emails were requested. Wait a few minutes and try again.' : 'The link could not be sent: ' + error.message)
+        : 'If that email has a Layover Club login, a link is on its way. It works for about an hour. Check your spam folder too.';
+    });
+  } }, h('p', { class: 'text-sm' }, 'Type the email address of your login. We will email you a link where you choose your own password.'), fEmail, fBtn, fMsg,
+    h('button', { class: 'underline text-sm', type: 'button', style: 'min-height:2.75rem', onclick: () => { forgotBox.style.display = 'none'; form.style.display = ''; forgot.style.display = ''; } }, 'Back to sign in'));
+  const forgot = h('button', { class: 'underline text-sm', type: 'button', style: 'min-height:2.75rem', onclick: () => { form.style.display = 'none'; forgot.style.display = 'none'; forgotBox.style.display = ''; fEmail.focus(); } }, 'First time, or forgot your password? Email me a link');
   app.replaceChildren(h('main', { id: 'main', class: 'min-h-screen flex items-center justify-center p-4' },
     h('div', { class: 'card w-full max-w-sm space-y-4' },
       h('div', {}, h('div', { class: 'text-xs font-extrabold tracking-widest', style: 'color:#0642B8' }, 'LAYOVER DESSERT CAFÉ'), h('h1', { class: 'text-2xl font-extrabold', style: 'color:#0642B8' }, 'Layover Club'), h('p', { class: 'text-sm muted' }, 'Staff only. Sign in to verify members and record redemptions.')),
-      form)));
+      form, forgot, forgotBox)));
 }
 
 function renderMessage(title, text) {
