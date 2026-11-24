@@ -1,4 +1,4 @@
-import { h, badge, fmtDate, fmtTime } from './ui.js';
+import { h, badge, fmtDate, fmtTime, toast } from './ui.js';
 import { qrSvg, qrPayload, qrMatrix, groupCode } from './qr.js';
 
 export const STATUS_WORD = { active: 'ACTIVE', expired: 'EXPIRED', suspended: 'SUSPENDED', cancelled: 'CANCELLED', pending: 'NOT ACTIVE YET' };
@@ -90,7 +90,9 @@ export function cardPair(m, token, rules, opts = {}) {
   const actions = opts.noActions ? null : h('div', { class: 'flex gap-2 flex-wrap no-print' },
     h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => window.print() }, 'Print card (85.6 × 54 mm)'),
     h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => downloadCardPng('front', m, token, rules) }, 'Download front (PNG)'),
-    h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => downloadCardPng('back', m, token, rules) }, 'Download back (PNG)'));
+    h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => downloadCardPng('back', m, token, rules) }, 'Download back (PNG)'),
+    h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: () => downloadQrPng(m, token, rules) }, 'Download QR only (PNG)'),
+    navigator.share ? h('button', { class: 'btn btn-success btn-sm', type: 'button', onclick: () => shareCard(m, token, rules) }, 'Send / share card…') : null);
   // the pair itself is the print area: front and back each print on their own 85.6 x 54 mm page
   return h('div', { class: 'space-y-3' }, h('div', { class: 'card-pair print-area' }, cardFront(m), cardBack(m, token, rules)), actions);
 }
@@ -138,6 +140,35 @@ export function drawCard(side, m, token, rules) {
 export function downloadCardPng(side, m, token, rules) {
   const c = drawCard(side, m, token, rules);
   c.toBlob((blob) => { const a = h('a', { href: URL.createObjectURL(blob), download: `${m.member_no}-card-${side}.png` }); document.body.append(a); a.click(); a.remove(); }, 'image/png');
+}
+
+// A plain QR picture (white, with the name and ID under it) for sending to a customer by Messenger, SMS or email. The QR holds only the secret code / app link.
+export function qrCanvas(m, token, rules) {
+  const { n, dark } = qrMatrix(qrPayload(token, rules)), mod = 14, quiet = 4, side = (n + quiet * 2) * mod, textH = 150;
+  const c = document.createElement('canvas'); c.width = side; c.height = side + textH;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#000'; for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (dark(r, q)) ctx.fillRect((q + quiet) * mod, (r + quiet) * mod, mod, mod);
+  ctx.fillStyle = '#0642B8'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.font = '800 34px system-ui, Arial, sans-serif'; ctx.fillText('LAYOVER CLUB', side / 2, side + 6, side - 20);
+  ctx.fillStyle = '#111'; ctx.font = '700 30px system-ui, Arial, sans-serif'; ctx.fillText(m.name, side / 2, side + 50, side - 20);
+  ctx.font = '600 26px ui-monospace, Menlo, Consolas, monospace'; ctx.fillText(m.member_no, side / 2, side + 92, side - 20);
+  return c;
+}
+const toBlob = (c) => new Promise((res) => c.toBlob(res, 'image/png'));
+export async function downloadQrPng(m, token, rules) {
+  const blob = await toBlob(qrCanvas(m, token, rules));
+  const a = h('a', { href: URL.createObjectURL(blob), download: `${m.member_no}-qr.png` }); document.body.append(a); a.click(); a.remove();
+}
+// On a phone this opens the share sheet (Messenger, Viber, SMS...) with the card pictures attached. Where sharing files is not supported, it says so.
+export async function shareCard(m, token, rules) {
+  try {
+    const files = [new File([await toBlob(drawCard('front', m, token, rules))], `${m.member_no}-card-front.png`, { type: 'image/png' }),
+      new File([await toBlob(drawCard('back', m, token, rules))], `${m.member_no}-card-back.png`, { type: 'image/png' }),
+      new File([await toBlob(qrCanvas(m, token, rules))], `${m.member_no}-qr.png`, { type: 'image/png' })];
+    if (!navigator.canShare || !navigator.canShare({ files })) { toast('Sharing pictures is not available in this browser. Use the download buttons instead.', 'warn'); return; }
+    await navigator.share({ files, title: 'Your Layover Club card', text: `Your Layover Club card (${m.member_no}). Show the QR at the counter.` });
+  } catch (e) { if (e && e.name !== 'AbortError') toast('Could not share: ' + (e.message || e), 'err'); }
 }
 
 // Kept for older call sites (small card preview).
